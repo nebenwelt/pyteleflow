@@ -1,0 +1,13 @@
+indent-width = 2
+line-length = 100
+
+[lint]
+ignore = [
+    "G201", # Logging `.exception(...)` should be used instead of `.error(..., exc_info=True)`
+    "F401", # Unused imports
+    "I001", # Import block is un-sorted or un-formatted
+]
+
+
+[format]
+indent-style = "space"
