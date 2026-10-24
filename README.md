@@ -159,6 +159,7 @@ if __name__ == "__main__":
 ## Framework specifics and limitations
 
 __Conversation state does not survive restarts.__
+
 The simplicity of writing and reading Flows comes at a cost. In the current architecture, active Flow instances are stored only in process memory. If the bot restarts, all conversations will be lost, and users will have to start them over. Python cannot serialize and restore the stack of `asyncio` coroutines. As a result, a coroutine cannot resume from its suspension point after the process restarts. There are theoretically a couple of ways to address this problem, but they would make Flow code more complicated.
 
 How critical is this?
