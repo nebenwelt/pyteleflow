@@ -172,6 +172,7 @@ Currently, `pyteleflow.widgets` includes only a few widgets. More may be added i
 Spawned Flow instances can be cancelled for several reasons:
 
 __Flow inactivity__
+
 The last activity is considered to be the moment you receive a message through the context, when `ctx.message()` returns a received message that matches the specified filter
 ```python
 msg = await ctx.message(filters.PHOTO)
@@ -182,9 +183,11 @@ ctx.inactivity_timeout = timedelta(minutes=20)
 ```
 
 __Flow respawn__
+
 If a filter is configured in `respawn_trigger` (set when creating `FlowApp`), for example `filters.Text(["/start"])`, the active Flow instance will first be cancelled and then restarted from the beginning.
 
 __Stopping the bot application__
+
 Always use the `FlowApp.shutdown()` method when stopping the application. This method initiates cancellation of all active Flow instances.
 
 
