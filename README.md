@@ -125,7 +125,7 @@ async def quickstart_flow(ctx: Context):
     elif result.item == "View profile":
       await chat.send_photo(
         photo=user_photo,
-        caption=f"PROFILE\nUser name: {user_name}\nUser ID: {msg.from_user.id}",
+        caption=f"PROFILE\nUser name:  {user_name}\nUser ID:  {msg.from_user.id}",
       )
 ```
 
