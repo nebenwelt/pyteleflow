@@ -1,4 +1,4 @@
-![Static Badge](https://img.shields.io/badge/version-0.1.0-blue?style=plastic) ![Static Badge](https://img.shields.io/badge/license-MIT-green?style=plastic) ![Static Badge](https://img.shields.io/badge/python-3.12+-blue?style=plastic&logo=python)
+![Static Badge](https://img.shields.io/badge/version-0.1.2-blue?style=plastic) ![Static Badge](https://img.shields.io/badge/license-MIT-green?style=plastic) ![Static Badge](https://img.shields.io/badge/python-3.12+-blue?style=plastic&logo=python)
 
 # Introduction
 

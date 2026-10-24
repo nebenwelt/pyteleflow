@@ -8,7 +8,7 @@ module-name = "pyteleflow"
 
 [project]
 name = "pyteleflow"
-version = "0.1.1"
+version = "0.1.2"
 description = "Asynchronous framework for building Telegram bots with linear flows"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -18,16 +18,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 classifiers = [
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3 :: Only",
-  "Framework :: AsyncIO",
-  "Topic :: Communications :: Chat",
-  "Topic :: Software Development :: Libraries :: Python Modules",
-  "Typing :: Typed",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Framework :: AsyncIO",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -42,6 +42,11 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.17.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/nebenwelt/pyteleflow"
+Repository = "https://github.com/nebenwelt/pyteleflow"
+Issues = "https://github.com/nebenwelt/pyteleflow/issues"
 
 [tool.pytest.ini_options]
 log_cli = false
