@@ -230,3 +230,6 @@ app.add_pre_middlewares(
     [Authentication(allowed_user_ids=(111111, 222222, 3333333))],
 )
 ```
+
+## Background tasks
+`pyteleflow` позволяет запускать фоновые задачи. Смотри пример в [background_task.py](./examples/background_task.py) 
