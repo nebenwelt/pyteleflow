@@ -8,7 +8,7 @@ module-name = "pyteleflow"
 
 [project]
 name = "pyteleflow"
-version = "0.1.0"
+version = "0.1.1"
 description = "Asynchronous framework for building Telegram bots with linear flows"
 license = "MIT"
 license-files = ["LICENSE"]

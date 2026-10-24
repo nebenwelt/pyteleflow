@@ -1,11 +1,12 @@
 import asyncio as aio
 import logging
 import platform
+import secrets
 import signal
 import time
-from asyncio import Lock, Queue
+from asyncio import Lock, Queue, Task
 from collections import deque
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from datetime import timedelta
 from types import MappingProxyType
 from typing import Any
@@ -134,6 +135,8 @@ class FlowApp:
     self._middlewares: list[Middleware | AsyncMiddleware] = []
     self._lock: Lock = Lock()
     self._is_running: bool = False
+    self._bg_tasks: set[Task] = set()  # background tasks
+    self._startup_coroutines: list[tuple[str | None, Coroutine]] = []
 
     self._flow_inactivity_timeout: float
     if isinstance(flow_inactivity_timeout, timedelta):
@@ -180,13 +183,19 @@ class FlowApp:
       initial_update=initial_update,
       inactivity_timeout=self._flow_inactivity_timeout,
       shared_data=self._shared_data,
+      app=self,
+    )
+
+    task = aio.create_task(
+      self._entry_coro(context),
+      name=f"flow_{flow_key.chat_id}_{flow_key.user_id}_{flow_key.thread_id}_{flow_key.update_id}",
+    )
+    task.add_done_callback(
+      lambda _task: self._done_flow_task_callback(_task, flow_key),
     )
 
     new_flow = Flow(
-      task=aio.create_task(
-        self._entry_coro(context),
-        name=f"flow_{flow_key.chat_id}_{flow_key.user_id}_{flow_key.thread_id}_{flow_key.update_id}",
-      ),
+      task=task,
       context=context,
       key=flow_key,
     )
@@ -197,20 +206,6 @@ class FlowApp:
       f"thread_id={flow_key.thread_id}, update_id={flow_key.update_id}), "
       f"limit {len(self._spawned_flows)}/{self._concurrency_limit or '∞'}"
     )
-
-  def _cleanup_non_running_flows(self) -> None:
-    keys: deque[FlowKey] = deque()
-
-    for flow in self._spawned_flows.values():
-      status = get_task_status(flow.task)
-      if status != TaskStatus.RUNNING:
-        if status == TaskStatus.EXCEPTION:
-          e = flow.task.exception()
-          _logger.error(e, exc_info=e)
-        keys.append(flow.key)
-
-    for k in keys:
-      self._spawned_flows.pop(k, None)
 
   async def _cancel_inactive_flows(self):
     """
@@ -230,24 +225,21 @@ class FlowApp:
     )
 
     for key in inactive_keys:
-      flow = self._spawned_flows[key]
-      status = get_task_status(flow.task)
-      if status == TaskStatus.EXCEPTION:
-        e = flow.task.exception()
-        _logger.error(e, exc_info=e)
-      if status == TaskStatus.RUNNING:
-        raise FlowCancellationFailed("Failed to cancel the task associated with the Flow.")
+      if self._spawned_flows.get(key, None) is not None:
+        flow = self._spawned_flows[key]
+        status = get_task_status(flow.task)
+        if status == TaskStatus.EXCEPTION:
+          e = flow.task.exception()
+          _logger.error(e, exc_info=e)
+        if status == TaskStatus.RUNNING:
+          raise FlowCancellationFailed("Failed to cancel the task associated with the Flow.")
 
-      self._spawned_flows.pop(key, None)
+        self._spawned_flows.pop(key, None)
 
   async def _respawn_flow(self, key: FlowKey, initial_update: Update):
     flow = self._spawned_flows[key]
 
-    status = get_task_status(flow.task)
-    if status == TaskStatus.EXCEPTION:
-      e = flow.task.exception()
-      _logger.error(e, exc_info=e)
-    elif status == TaskStatus.RUNNING:
+    if get_task_status(flow.task) == TaskStatus.RUNNING:
       await cancel_tasks([flow.task], self._flow_cancellation_timeout)
 
     if get_task_status(flow.task) != TaskStatus.RUNNING:
@@ -256,10 +248,36 @@ class FlowApp:
     else:
       raise UnexpectedError("Failed to cancel the task during flow respawn.")
 
+  def _done_flow_task_callback(self, task: Task, key: FlowKey):
+    flow = self._spawned_flows.get(key, None)
+    if flow is None:
+      return
+
+    status = get_task_status(flow.task)
+    if status == TaskStatus.EXCEPTION:
+      e = flow.task.exception()
+      _logger.error(e, exc_info=e)
+    elif status == TaskStatus.RUNNING:
+      raise UnexpectedError("The Flow task is still running")
+
+    self._spawned_flows.pop(key, None)
+
+  def _done_bg_task_callback(self, task: Task):
+    if get_task_status(task) == TaskStatus.EXCEPTION:
+      e = task.exception()
+      _logger.error(e, exc_info=e)
+    self._bg_tasks.discard(task)
+
+  def create_bg_task(self, coroutine: Coroutine, name: str | None = None):
+    """Create a background asyncio task."""
+    task = aio.create_task(coroutine, name=name or f"background_task_{secrets.token_urlsafe(8)}")
+    task.add_done_callback(self._done_bg_task_callback)
+    self._bg_tasks.add(task)
+
   async def process_update(self, update: Update):
     async with self._lock:
       await self._cancel_inactive_flows()
-      self._cleanup_non_running_flows()
+
       await aio.sleep(0)
 
       for middleware in self._middlewares:
@@ -290,7 +308,6 @@ class FlowApp:
           self._spawn_new_flow(flow_key, update)
 
       await aio.sleep(0)
-      self._cleanup_non_running_flows()
 
   @staticmethod
   def _raise_system_exit():
@@ -316,30 +333,47 @@ class FlowApp:
           await self.process_update(update)
       else:
         await self._cancel_inactive_flows()
-        self._cleanup_non_running_flows()
 
   async def initialize(self):
     await self._bot.initialize()
 
-  async def shutdown(self):
+  def add_startup_task(self, coroutine: Coroutine, name: str | None = None):
+    """Coroutine that run as background task alongside long polling."""
+    self._startup_coroutines.append((name, coroutine))
+
+  async def shutdown(self, max_timeout: timedelta | float = 10.0):
     """Graceful shutdown.
+    Args:
+      max_timeout:
+        The maximum amount of time allowed for all Flow instances and background tasks to
+        handle asyncio.CancelledError and shutdown.
 
     Example:
       try:
         ...
         await app.run_polling()
       finally:
-        await app.shutdown()
+        await app.shutdown(max_timeout=10.0)
     """
+    if isinstance(max_timeout, timedelta):
+      _max_timeout = float(max_timeout.total_seconds())
+    else:
+      _max_timeout = float(max_timeout)
 
     tasks = [flow.task for flow in self._spawned_flows.values()]
+    flow_task_count = len(tasks)
+    bg_task_count = len(self._bg_tasks)
+
+    tasks.extend(self._bg_tasks)
     if len(tasks) > 0:
-      _logger.info(f"Waiting for {len(tasks)} Flow tasks to be canceled")
-      await cancel_tasks([flow.task for flow in self._spawned_flows.values()], 10.0)
+      _logger.info(
+        f"Waiting for tasks to be cancelled. Flow tasks: {flow_task_count}, background tasks: {bg_task_count}"
+      )
+      await cancel_tasks(tasks, _max_timeout)
 
     await self._bot.shutdown()
-    _logger.info("Shutdown completed")
     self._is_running = False
+    _logger.info("Shutdown completed")
 
   async def run_polling(
     self,
@@ -349,6 +383,7 @@ class FlowApp:
       UpdateType.CALLBACK_QUERY,
     ),
     handle_sys_signals: bool = True,
+    with_bg_tasks: Sequence[Coroutine] | None = None,
   ) -> None:
     """Starts the long polling loop and processes incoming updates.
 
@@ -358,7 +393,9 @@ class FlowApp:
 
     Args:
       poll_interval: Timeout in seconds for long polling.
+
       allowed_updates: Update types the bot subscribes to.
+
       handle_sys_signals: If `True`, installs handlers for `SIGINT`,
         `SIGTERM` and `SIGABRT` to stop polling on system signals. Has no
         effect on Windows.
@@ -382,6 +419,10 @@ class FlowApp:
         loop.add_signal_handler(sig, self._raise_system_exit)
 
     await self.initialize()
+
+    for name, coro in self._startup_coroutines:
+      self.create_bg_task(coro, name)
+      await aio.sleep(0)
 
     _logger.info("Run long polling")
     try:

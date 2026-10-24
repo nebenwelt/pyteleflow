@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import time
 from asyncio import Queue, Task
+from collections.abc import Coroutine
 from datetime import timedelta
 from re import Pattern
+from typing import TYPE_CHECKING
 
 from telegram import Bot, CallbackQuery, Message, Update
 from telegram.ext import filters
@@ -9,6 +13,9 @@ from telegram.ext.filters import BaseFilter, MessageFilter
 
 from . import filters_ext
 from ._types import FlowKey
+
+if TYPE_CHECKING:
+  from ._app import FlowApp
 
 
 class Context:
@@ -18,9 +25,11 @@ class Context:
     initial_update: Update,
     inactivity_timeout: float,
     shared_data: dict,
+    app: FlowApp,
   ):
     self._updates: Queue[Update] = Queue()
     self.bot = bot
+    self._app = app
     self._shared_data = shared_data
     self._last_activity_at: float = time.monotonic()
 
@@ -55,6 +64,10 @@ class Context:
       if _filter is None or _filter.check_update(update):
         self._last_update = update
         return update
+
+  def create_bg_task(self, coroutine: Coroutine, name: str | None = None):
+    """ Create a background asyncio task. """
+    self._app.create_bg_task(coroutine, name)
 
   async def update(self, _filter: BaseFilter | None = None) -> Update:
     """Waits for and returns the next Update from Flow context queue.
@@ -96,9 +109,9 @@ class Context:
     """Returns the last Update retrieved from the Flow context queue."""
     return self._last_update
 
+
 class Flow:
   def __init__(self, task: Task, context: Context, key: FlowKey):
     self.task = task
     self.context = context
     self.key = key
-

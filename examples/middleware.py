@@ -13,7 +13,7 @@ from pyteleflow.middleware import Middleware
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
-
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 class Authentication(Middleware):
   def __init__(self, allowed_user_ids: Iterable[int]):
