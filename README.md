@@ -232,4 +232,4 @@ app.add_pre_middlewares(
 ```
 
 ## Background tasks
-`pyteleflow` позволяет запускать фоновые задачи. Смотри пример в [background_task.py](./examples/background_task.py) 
+`pyteleflow` supports running background tasks. See the example in [background_task.py](./examples/background_task.py) 
