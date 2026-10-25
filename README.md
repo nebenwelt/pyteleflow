@@ -1,4 +1,5 @@
-![PyPI Version](https://img.shields.io/pypi/v/pyteleflow?style=plastic&color=blue) ![Static Badge](https://img.shields.io/badge/license-MIT-green?style=plastic) ![Static Badge](https://img.shields.io/badge/python-3.12+-blue?style=plastic&logo=python)
+![PyPI Version](https://img.shields.io/pypi/v/pyteleflow?style=plastic&color=blue&cacheSeconds=60) ![Static Badge](https://img.shields.io/badge/license-MIT-green?style=plastic) ![Static Badge](https://img.shields.io/badge/python-3.12+-blue?style=plastic&logo=python)
+
 
 # Introduction
 
