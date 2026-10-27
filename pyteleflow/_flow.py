@@ -80,6 +80,13 @@ class Context:
     return await self._get_update(_filter)
 
   async def message(self, _filter: MessageFilter | None = None) -> Message:
+    """Waits for and returns the next Message from Flow context queue.
+
+    Args:
+      _filter: Optional filter to match the Message against. If provided,
+        Messages that do not match the filter are ignored. The Message will wait until
+        a matching Message appears in the queue.
+    """
     while True:
       if _filter:
         update = await self._get_update(filters.UpdateType.MESSAGE & _filter)
@@ -88,6 +95,24 @@ class Context:
 
       if update.message is not None:
         return update.message
+
+
+  async def guest_message(self, _filter: MessageFilter | None = None) -> Message:
+    """Waits for and returns the next Guest Message from Flow context queue.
+
+    Args:
+      _filter: Optional filter to match the Message against. If provided,
+        Messages that do not match the filter are ignored. The Message will wait until
+        a matching Message appears in the queue.
+    """
+    while True:
+      if _filter:
+        update = await self._get_update(filters.UpdateType.GUEST_MESSAGE & _filter)
+      else:
+        update = await self._get_update(filters.UpdateType.GUEST_MESSAGE)
+
+      if update.guest_message is not None:
+        return update.guest_message
 
   async def callback_query(self, data_pattern: str | Pattern | None = None) -> CallbackQuery:
     while True:

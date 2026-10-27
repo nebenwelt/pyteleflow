@@ -368,7 +368,7 @@ wheels = [
 
 [[package]]
 name = "pyteleflow"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "python-telegram-bot", extra = ["rate-limiter"] },

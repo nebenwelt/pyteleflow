@@ -378,7 +378,7 @@ class FlowApp:
   async def run_polling(
     self,
     poll_interval: int = 30,
-    allowed_updates: tuple[UpdateType, ...] = (
+    allowed_updates: tuple[UpdateType, ...] | None = (
       UpdateType.MESSAGE,
       UpdateType.CALLBACK_QUERY,
     ),
@@ -394,7 +394,8 @@ class FlowApp:
     Args:
       poll_interval: Timeout in seconds for long polling.
 
-      allowed_updates: Update types the bot subscribes to.
+      allowed_updates:
+        Update types the bot subscribes to. Set to None to receive all update types.
 
       handle_sys_signals: If `True`, installs handlers for `SIGINT`,
         `SIGTERM` and `SIGABRT` to stop polling on system signals. Has no
