@@ -8,7 +8,7 @@ module-name = "pyteleflow"
 
 [project]
 name = "pyteleflow"
-version = "0.1.5"
+version = "0.1.6"
 description = "Asynchronous framework for building Telegram bots with linear flows"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -46,6 +46,7 @@ dev = [
 Homepage = "https://github.com/nebenwelt/pyteleflow"
 Repository = "https://github.com/nebenwelt/pyteleflow"
 Issues = "https://github.com/nebenwelt/pyteleflow/issues"
+Changelog = "https://github.com/nebenwelt/pyteleflow/blob/master/CHANGELOG.md"
 
 [tool.pytest.ini_options]
 log_cli = false
