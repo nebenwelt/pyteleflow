@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import NamedTuple, Literal
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message
-
+from telegram.constants import ParseMode
 
 from ..errors import WidgetError
 from .._flow import Context
@@ -43,6 +43,7 @@ class Select:
     prompt: str,
     items: Sequence[str],
     direction: Literal["vertical", "horizontal"] = "vertical",
+    parse_mode: ParseMode | None = None,
   ):
     """
     Args:
@@ -66,6 +67,7 @@ class Select:
     self._items: Sequence[str] = items
     self._prompt: str = prompt
     self._direction = direction
+    self._parse_mode = parse_mode
 
   def _create_keyboard(self, uid: str, cancel_button: bool):
     keyboard = []
@@ -118,11 +120,13 @@ class Select:
           chat_id=chat_id,  # type: ignore
           text=self._prompt,
           reply_markup=InlineKeyboardMarkup(keyboard),
+          parse_mode=self._parse_mode,
         )
       else:
         sent_msg = await reply_to_message.reply_text(
           text=self._prompt,
           reply_markup=InlineKeyboardMarkup(keyboard),
+          parse_mode=self._parse_mode,
         )
 
       resp = await self._ctx.callback_query(data_pattern=f"^{uid}.*")
