@@ -7,6 +7,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from .._flow import Context
 from ..errors import WidgetError
+from ._common import Button
+
+_DEFAULT_CANCEL_BUTTON = Button("Cancel", style="danger")
 
 
 class _CBData(NamedTuple):
@@ -35,6 +38,7 @@ class PagedSelect:
     prompt: str,
     items: Sequence[str],
     page_size: int = 5,
+    cancel_button: Button | None = _DEFAULT_CANCEL_BUTTON,
   ):
     """
     Args:
@@ -43,6 +47,7 @@ class PagedSelect:
       items: Full list of items to choose from.
       page_size: Number of items displayed on a single page.
         Must be greater than or equal to 1.
+      cancel_button: Button used for cancellation. If None, cancel button is not shown.
 
     Raises:
       ValueError: If `page_size` is less than 1.
@@ -54,15 +59,14 @@ class PagedSelect:
     self._items: Sequence[str] = items
     self._prompt: str = prompt
     self._page_size: int = page_size
+    self._cancel_button: Button | None = cancel_button
 
   @property
   def pages_count(self) -> int:
     """Total number of pages (not less than 1)."""
     return max(1, -(-len(self._items) // self._page_size))
 
-  def _create_keyboard(
-    self, uid: str, page: int, cancel_button: bool
-  ) -> list[list[InlineKeyboardButton]]:
+  def _create_keyboard(self, uid: str, page: int) -> list[list[InlineKeyboardButton]]:
     keyboard = []
 
     start = page * self._page_size
@@ -101,12 +105,12 @@ class PagedSelect:
         ]
       )
 
-    if cancel_button:
+    if self._cancel_button is not None:
       keyboard.append(
         [
           InlineKeyboardButton(
-            "Cancel",
-            style="danger",
+            self._cancel_button.text,
+            style=self._cancel_button.style,
             callback_data=_CBData(uid=uid, action="cancel", value="").pack(),
           )
         ]
@@ -117,7 +121,6 @@ class PagedSelect:
   async def _show(
     self,
     chat_id: int | str | None,
-    cancel_button: bool,
     reply_to_message: Message | None = None,
   ) -> Result:
     uid: str = secrets.token_urlsafe(8)
@@ -129,12 +132,12 @@ class PagedSelect:
         sent_msg = await self._ctx.bot.send_message(
           chat_id=chat_id,  # type: ignore
           text=self._prompt,
-          reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page, cancel_button)),
+          reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page)),
         )
       else:
         sent_msg = await reply_to_message.reply_text(
           text=self._prompt,
-          reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page, cancel_button)),
+          reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page)),
         )
 
       while True:
@@ -155,7 +158,7 @@ class PagedSelect:
           if sent_msg is not None:
             await sent_msg.edit_text(
               text=self._prompt,
-              reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page, cancel_button)),
+              reply_markup=InlineKeyboardMarkup(self._create_keyboard(uid, page)),
             )
           continue
 
@@ -169,8 +172,10 @@ class PagedSelect:
       if sent_msg is not None:
         await sent_msg.delete()
 
-  async def show_as_reply(self, reply_to_message: Message, cancel_button: bool = True) -> Result:
-    return await self._show(None, cancel_button, reply_to_message)
+  async def show_as_reply(self, reply_to_message: Message) -> Result:
+    """Show the paged select as a reply to the given message."""
+    return await self._show(None, reply_to_message)
 
-  async def show(self, chat_id: int | str, cancel_button: bool = True) -> Result:
-    return await self._show(chat_id, cancel_button)
+  async def show(self, chat_id: int | str) -> Result:
+    """Show the paged select in the given chat."""
+    return await self._show(chat_id)

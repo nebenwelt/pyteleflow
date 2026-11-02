@@ -8,7 +8,9 @@ from telegram.constants import ParseMode
 
 from ..errors import WidgetError
 from .._flow import Context
+from ._common import Button
 
+_DEFAULT_CANCEL_BUTTON = Button("Cancel", style="danger")
 
 class _CBData(NamedTuple):
   uid: str
@@ -20,11 +22,12 @@ class _CBData(NamedTuple):
 
   @staticmethod
   def unpack(text: str) -> "_CBData":
-
     return _CBData(*text.split(":", 2))  # type: ignore
 
 
 class Select:
+  """The widget allows the user to select one option from several."""
+
   # Maximum number of items in the vertical layout (one extra button is reserved for Cancel)
   MAX_BUTTONS_VERTICAL: int = 99
 
@@ -44,13 +47,16 @@ class Select:
     items: Sequence[str],
     direction: Literal["vertical", "horizontal"] = "vertical",
     parse_mode: ParseMode | None = None,
+    cancel_button: Button | None = _DEFAULT_CANCEL_BUTTON,
   ):
     """
     Args:
       ctx: Flow context.
-      prompt: Message text shown above the keyboard.
+      prompt: Message text shown above the inline keyboard.
       items: Full list of items to choose from.
       direction: Vertical or horizontal button layout.
+      parse_mode: Parse mode for the prompt message.
+      cancel_button: Button used for cancellation. If None, cancel button is not shown.
 
     Raises:
       WidgetError: If the number of items exceeds the limit for the given layout.
@@ -68,8 +74,9 @@ class Select:
     self._prompt: str = prompt
     self._direction = direction
     self._parse_mode = parse_mode
+    self._cancel_button: Button | None = cancel_button
 
-  def _create_keyboard(self, uid: str, cancel_button: bool):
+  def _create_keyboard(self, uid: str):
     keyboard = []
     row = []
 
@@ -93,25 +100,25 @@ class Select:
         )
       keyboard.append(row)
 
-    if cancel_button:
-      row = [
-        InlineKeyboardButton(
-          "Cancel",
-          style="danger",
-          callback_data=_CBData(uid=uid, action="cancel", item_index="").pack(),
-        )
-      ]
-      keyboard.append(row)
+    if self._cancel_button is not None:
+      keyboard.append(
+        [
+          InlineKeyboardButton(
+            self._cancel_button.text,
+            style=self._cancel_button.style,
+            callback_data=_CBData(uid=uid, action="cancel", item_index="").pack(),
+          )
+        ]
+      )
     return keyboard
 
   async def _show(
     self,
     chat_id: int | str | None,
-    cancel_button: bool,
     reply_to_message: Message | None = None,
   ) -> Result:
     uid: str = secrets.token_urlsafe(8)
-    keyboard = self._create_keyboard(uid, cancel_button)
+    keyboard = self._create_keyboard(uid)
 
     sent_msg = None
     try:
@@ -147,8 +154,10 @@ class Select:
       if sent_msg is not None:
         await sent_msg.delete()
 
-  async def show_as_reply(self, reply_to_message: Message, cancel_button: bool = True) -> Result:
-    return await self._show(None, cancel_button, reply_to_message)
+  async def show_as_reply(self, reply_to_message: Message) -> Result:
+    """Show the select as a reply to the given message."""
+    return await self._show(None, reply_to_message)
 
-  async def show(self, chat_id: int | str, cancel_button: bool = True) -> Result:
-    return await self._show(chat_id, cancel_button)
+  async def show(self, chat_id: int | str) -> Result:
+    """Show the select in the given chat."""
+    return await self._show(chat_id)
