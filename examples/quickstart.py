@@ -1,5 +1,3 @@
-# type: ignore
-
 import asyncio as aio
 import os
 import logging
@@ -38,7 +36,7 @@ async def quickstart_flow(ctx: Context):
     prompt="Your profile is complete. Would you like to save it?",
     items=["Save", "View profile"],
     direction="horizontal",
-  ).show(chat.id, cancel_button=True)
+  ).show(chat.id)
 
   if not result.canceled:
     if result.item == "Save":

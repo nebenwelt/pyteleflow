@@ -1,4 +1,3 @@
-# type: ignore
 
 import asyncio as aio
 import os
@@ -7,7 +6,7 @@ from collections.abc import Iterable
 
 from telegram import Update
 from telegram.ext import ExtBot, AIORateLimiter, filters
-from pyteleflow import FlowApp, Context, widgets, ConcurrencyStrategy
+from pyteleflow import FlowApp, Context, ConcurrencyStrategy
 from pyteleflow.middleware import Middleware
 
 logging.basicConfig(level=logging.DEBUG)

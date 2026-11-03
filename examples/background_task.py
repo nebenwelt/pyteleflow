@@ -1,11 +1,10 @@
-# type: ignore
-
 import asyncio as aio
-import os
 import logging
+import os
 
-from telegram.ext import ExtBot, AIORateLimiter, filters
-from pyteleflow import FlowApp, Context, widgets, ConcurrencyStrategy
+from telegram.ext import AIORateLimiter, ExtBot, filters
+
+from pyteleflow import ConcurrencyStrategy, Context, FlowApp, widgets
 
 # logging initialization
 logging.basicConfig(level=logging.DEBUG)
@@ -14,6 +13,7 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
 
 async def startup(alert: str):
   logger.info(f"Run startup task. alert: {alert}")
@@ -25,7 +25,6 @@ async def timer(seconds, chat):
     await chat.send_message("Wake up!")
 
 
-
 async def flow(ctx: Context):
   chat = ctx.initial_update.effective_chat
 
@@ -34,7 +33,7 @@ async def flow(ctx: Context):
     prompt="Set a timer?",
     items=["Yes"],
     direction="vertical",
-  ).show(chat.id, cancel_button=True)
+  ).show(chat.id)
 
   if not result.canceled:
     # Run background task
