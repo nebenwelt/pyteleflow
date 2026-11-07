@@ -28,12 +28,13 @@ async def timer(seconds, chat):
 async def flow(ctx: Context):
   chat = ctx.initial_update.effective_chat
 
-  result = await widgets.Select(
-    ctx=ctx,
+  select = widgets.Select(ctx=ctx, chat_id=chat.id)
+  result = await select.show(
     prompt="Set a timer?",
     items=["Yes"],
     direction="vertical",
-  ).show(chat.id)
+  )
+  await select.delete()
 
   if not result.canceled:
     # Run background task

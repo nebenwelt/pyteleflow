@@ -1,7 +1,9 @@
+import asyncio
+import contextlib
 import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import NamedTuple, Literal
+from typing import Literal, NamedTuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.constants import ParseMode
@@ -10,7 +12,6 @@ from ..errors import WidgetError
 from .._flow import Context
 from ._common import Button
 
-_DEFAULT_CANCEL_BUTTON = Button("Cancel", style="danger")
 
 class _CBData(NamedTuple):
   uid: str
@@ -40,58 +41,41 @@ class Select:
     item: str | None
     canceled: bool
 
-  def __init__(
-    self,
-    ctx: Context,
-    prompt: str,
-    items: Sequence[str],
-    direction: Literal["vertical", "horizontal"] = "vertical",
-    parse_mode: ParseMode | None = None,
-    cancel_button: Button | None = _DEFAULT_CANCEL_BUTTON,
-  ):
+  def __init__(self, ctx: Context, chat_id: int | str):
     """
     Args:
       ctx: Flow context.
-      prompt: Message text shown above the inline keyboard.
-      items: Full list of items to choose from.
-      direction: Vertical or horizontal button layout.
-      parse_mode: Parse mode for the prompt message.
-      cancel_button: Button used for cancellation. If None, cancel button is not shown.
-
-    Raises:
-      WidgetError: If the number of items exceeds the limit for the given layout.
+      chat_id: Chat where the widget is shown.
     """
-    max_buttons = (
-      self.MAX_BUTTONS_HORIZONTAL if direction == "horizontal" else self.MAX_BUTTONS_VERTICAL
-    )
-    if len(items) > max_buttons:
-      raise WidgetError(
-        f"Too many items: {len(items)} for {direction} layout (maximum is {max_buttons})."
-      )
-
     self._ctx: Context = ctx
-    self._items: Sequence[str] = items
-    self._prompt: str = prompt
-    self._direction = direction
-    self._parse_mode = parse_mode
-    self._cancel_button: Button | None = cancel_button
+    self._chat_id: int | str = chat_id
 
-  def _create_keyboard(self, uid: str):
-    keyboard = []
-    row = []
+    # The last message shown by this widget. Reused on the next show via edit.
+    self._message: Message | None = None
 
-    if self._direction == "vertical":
-      for index, item in enumerate(self._items):
-        row = [
-          InlineKeyboardButton(
-            str(item),
-            callback_data=_CBData(uid=uid, action="select_item", item_index=str(index)).pack(),
-          )
-        ]
-        keyboard.append(row)
+  def _create_keyboard(
+    self,
+    uid: str,
+    items: Sequence[str],
+    direction: Literal["vertical", "horizontal"],
+    cancel_button: Button | None,
+  ) -> InlineKeyboardMarkup:
+    keyboard: list[list[InlineKeyboardButton]] = []
 
-    elif self._direction == "horizontal":
-      for index, item in enumerate(self._items):
+    if direction == "vertical":
+      for index, item in enumerate(items):
+        keyboard.append(
+          [
+            InlineKeyboardButton(
+              str(item),
+              callback_data=_CBData(uid=uid, action="select_item", item_index=str(index)).pack(),
+            )
+          ]
+        )
+
+    elif direction == "horizontal":
+      row: list[InlineKeyboardButton] = []
+      for index, item in enumerate(items):
         row.append(
           InlineKeyboardButton(
             str(item),
@@ -100,64 +84,90 @@ class Select:
         )
       keyboard.append(row)
 
-    if self._cancel_button is not None:
+    if cancel_button is not None:
       keyboard.append(
         [
           InlineKeyboardButton(
-            self._cancel_button.text,
-            style=self._cancel_button.style,
+            cancel_button.text,
+            style=cancel_button.style,
             callback_data=_CBData(uid=uid, action="cancel", item_index="").pack(),
           )
         ]
       )
-    return keyboard
 
-  async def _show(
+    return InlineKeyboardMarkup(keyboard)
+
+  def _check_items(
+    self, items: Sequence[str], direction: Literal["vertical", "horizontal"]
+  ) -> None:
+    max_buttons = (
+      self.MAX_BUTTONS_HORIZONTAL if direction == "horizontal" else self.MAX_BUTTONS_VERTICAL
+    )
+    if len(items) > max_buttons:
+      raise WidgetError(
+        f"Too many items: {len(items)} for {direction} layout (maximum is {max_buttons})."
+      )
+
+  async def show(
     self,
-    chat_id: int | str | None,
+    prompt: str,
+    items: Sequence[str],
+    direction: Literal["vertical", "horizontal"] = "vertical",
+    parse_mode: ParseMode | None = None,
+    cancel_button: Button | None = None,
     reply_to_message: Message | None = None,
   ) -> Result:
+    """Show the select in the widget chat or as a reply to the given message."""
+    self._check_items(items, direction)
+
     uid: str = secrets.token_urlsafe(8)
-    keyboard = self._create_keyboard(uid)
+    reply_markup = self._create_keyboard(uid, items, direction, cancel_button)
 
-    sent_msg = None
+    if self._message is not None:
+      # The widget was shown before: replace the previous message instead of sending a new one.
+      edited = await self._message.edit_text(
+        text=prompt,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode,
+      )
+      if isinstance(edited, Message):
+        self._message = edited
+    elif reply_to_message is None:
+      self._message = await self._ctx.bot.send_message(
+        chat_id=self._chat_id,
+        text=prompt,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode,
+      )
+    else:
+      self._message = await reply_to_message.reply_text(
+        text=prompt,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode,
+      )
+
     try:
-      if reply_to_message is None:
-        sent_msg = await self._ctx.bot.send_message(
-          chat_id=chat_id,  # type: ignore
-          text=self._prompt,
-          reply_markup=InlineKeyboardMarkup(keyboard),
-          parse_mode=self._parse_mode,
-        )
-      else:
-        sent_msg = await reply_to_message.reply_text(
-          text=self._prompt,
-          reply_markup=InlineKeyboardMarkup(keyboard),
-          parse_mode=self._parse_mode,
-        )
-
       resp = await self._ctx.callback_query(data_pattern=f"^{uid}.*")
       await resp.answer()
+    except asyncio.CancelledError:
+      # Best-effort cleanup so a cancelled flow does not leave an orphaned widget message.
+      with contextlib.suppress(Exception):
+        await self.delete()
+      raise
 
-      data = _CBData.unpack(resp.data)  # type: ignore
-      if data.action == "cancel":
-        return Select.Result(None, None, canceled=True)
-      elif data.action == "select_item":
-        return Select.Result(
-          index=int(data.item_index), item=self._items[int(data.item_index)], canceled=False
-        )
+    data = _CBData.unpack(resp.data)  # type: ignore
+    if data.action == "cancel":
+      return Select.Result(None, None, canceled=True)
+    elif data.action == "select_item":
+      return Select.Result(
+        index=int(data.item_index), item=items[int(data.item_index)], canceled=False
+      )
 
-      else:
-        raise WidgetError(f'Action "{data.action}" is not implemented.')
+    else:
+      raise WidgetError(f'Action "{data.action}" is not implemented.')
 
-    finally:
-      if sent_msg is not None:
-        await sent_msg.delete()
-
-  async def show_as_reply(self, reply_to_message: Message) -> Result:
-    """Show the select as a reply to the given message."""
-    return await self._show(None, reply_to_message)
-
-  async def show(self, chat_id: int | str) -> Result:
-    """Show the select in the given chat."""
-    return await self._show(chat_id)
+  async def delete(self) -> None:
+    """Delete the message shown by the widget, if any."""
+    if self._message is not None:
+      message, self._message = self._message, None
+      await message.delete()

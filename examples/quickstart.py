@@ -31,12 +31,13 @@ async def quickstart_flow(ctx: Context):
   user_photo = msg.photo[0]
 
   # We show the user a widget with buttons and wait for them to select one
-  result = await widgets.Select(
-    ctx=ctx,
+  select = widgets.Select(ctx=ctx, chat_id=chat.id)
+  result = await select.show(
     prompt="Your profile is complete. Would you like to save it?",
     items=["Save", "View profile"],
     direction="horizontal",
-  ).show(chat.id)
+  )
+  await select.delete()
 
   if not result.canceled:
     if result.item == "Save":

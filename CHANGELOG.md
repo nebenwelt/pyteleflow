@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.8] - 2026-11-08
+
+### Changed
+
+- Refactoring of Select and LSelect widgets
+
 ## [0.1.7] - 2026-11-03
 
 ### Added
