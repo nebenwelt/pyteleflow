@@ -51,16 +51,21 @@ class Menu:
     items: Sequence[str | Button],
     prompt: str,
     parse_mode: ParseMode | None = None,
-  ) -> str:
-    """Show the menu and wait for the button click result.
+    no_wait: bool = False,
+  ) -> str | None:
+    """Show the menu.
+
+    Waits for the button click result unless `no_wait` is True.
 
     Args:
       items: Buttons of the menu. Each item occupies its own row.
       prompt: Message text shown above the keyboard.
       parse_mode: Parse mode used for `prompt`.
+      no_wait: If True, return immediately after showing the menu without waiting
+        for a button click.
 
     Returns:
-      Text of the clicked button.
+      Text of the clicked button, or None if `no_wait` is True.
 
     Raises:
       WidgetError: If `items` is empty or contains too many buttons.
@@ -74,6 +79,9 @@ class Menu:
       parse_mode=parse_mode,
     )
     self._is_shown = True
+
+    if no_wait:
+      return None
 
     # Waiting for a button click
     strings = [str(item) for item in items]
@@ -93,7 +101,7 @@ class Menu:
       prompt: Message text sent together with the keyboard removal.
       parse_mode: Parse mode used for `prompt`.
     """
-    if  self._is_shown:
+    if self._is_shown:
       await self._ctx.bot.send_message(
         chat_id=self._chat_id,
         text=prompt,

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10] - 2026-11-09
+
+### Added
+
+- `no_wait` parameter for `Menu.show()` and `LMenu.show()`: show the menu without waiting for a click.
+
+
 ## [0.1.9] - 2026-11-08
 
 ### Changed
