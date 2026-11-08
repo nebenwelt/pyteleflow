@@ -1,4 +1,3 @@
-import logging
 from collections.abc import Sequence
 
 from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -9,31 +8,27 @@ from .._flow import Context
 from ..errors import UnexpectedError, WidgetError
 from ._common import Button
 
-_logger = logging.getLogger(__name__)
-
 
 class Menu:
   """Simple menu with a single vertical column of buttons."""
 
-  MAX_BUTTONS_VERTICAL = 300
+  MAX_BUTTONS_VERTICAL: int = 300
 
-  def __init__(
-    self,
-    ctx: Context,
-    chat_id: int,
-    items: Sequence[str | Button] | None = None,
-    prompt: str | None = None,
-    parse_mode: ParseMode | None = None,
-  ):
+  def __init__(self, ctx: Context, chat_id: int | str):
+    """
+    Args:
+      ctx: Flow context.
+      chat_id: Chat where the widget is shown.
+    """
     self._ctx: Context = ctx
-    self._chat_id: int = chat_id
-    self._items: Sequence[str | Button] | None = items
-    self._prompt: str | None = prompt
-    self._parse_mode = parse_mode
+    self._chat_id: int | str = chat_id
 
-  def _create_keyboard(self) -> ReplyKeyboardMarkup:
-    keyboard = []
-    for item in self._items:
+    # Whether the menu keyboard is currently shown by this widget.
+    self._is_shown: bool = False
+
+  def _create_keyboard(self, items: Sequence[str | Button]) -> ReplyKeyboardMarkup:
+    keyboard: list[list[KeyboardButton]] = []
+    for item in items:
       if isinstance(item, str):
         btn = KeyboardButton(text=item)
       elif isinstance(item, Button):
@@ -45,39 +40,43 @@ class Menu:
 
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-  def _check_items(self, items: Sequence[str | Button] | None):
-    if items is None:
-      raise WidgetError("items is None")
-    elif len(items) == 0:
-      raise WidgetError("Menu items is empty")
+  def _check_items(self, items: Sequence[str | Button]) -> None:
+    if len(items) == 0:
+      raise WidgetError("Menu items are empty")
     elif len(items) > self.MAX_BUTTONS_VERTICAL:
       raise WidgetError(f"Too many items: {len(items)} (maximum is {self.MAX_BUTTONS_VERTICAL}).")
 
   async def show(
     self,
-    items: Sequence[str | Button] | None = None,
-    prompt: str | None = None,
+    items: Sequence[str | Button],
+    prompt: str,
     parse_mode: ParseMode | None = None,
   ) -> str:
     """Show the menu and wait for the button click result.
 
-    Returns:
-      Text of the clicked button
-    """
+    Args:
+      items: Buttons of the menu. Each item occupies its own row.
+      prompt: Message text shown above the keyboard.
+      parse_mode: Parse mode used for `prompt`.
 
-    self._items = items or self._items
-    self._parse_mode = parse_mode or self._parse_mode
-    self._check_items(self._items)
+    Returns:
+      Text of the clicked button.
+
+    Raises:
+      WidgetError: If `items` is empty or contains too many buttons.
+    """
+    self._check_items(items)
 
     await self._ctx.bot.send_message(
       chat_id=self._chat_id,
-      text=prompt or self._prompt,
-      reply_markup=self._create_keyboard(),
-      parse_mode=self._parse_mode,
+      text=prompt,
+      reply_markup=self._create_keyboard(items),
+      parse_mode=parse_mode,
     )
+    self._is_shown = True
 
     # Waiting for a button click
-    strings = [str(i) for i in self._items]
+    strings = [str(item) for item in items]
 
     msg = await self._ctx.message(filters.Text(strings))
     if msg.text is None:
@@ -85,9 +84,20 @@ class Menu:
     else:
       return msg.text
 
-  async def remove(self, prompt: str):
-    await self._ctx.bot.send_message(
-      chat_id=self._chat_id,
-      text=prompt,
-      reply_markup=ReplyKeyboardRemove(),
-    )
+  async def remove(self, prompt: str, parse_mode: ParseMode | None = None) -> None:
+    """Hide the menu keyboard if it was shown by `show()`.
+
+    Does nothing if the menu keyboard is not currently shown.
+
+    Args:
+      prompt: Message text sent together with the keyboard removal.
+      parse_mode: Parse mode used for `prompt`.
+    """
+    if  self._is_shown:
+      await self._ctx.bot.send_message(
+        chat_id=self._chat_id,
+        text=prompt,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=parse_mode,
+      )
+      self._is_shown = False

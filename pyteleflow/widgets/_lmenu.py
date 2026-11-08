@@ -1,13 +1,10 @@
-import copy
-import itertools
-
-from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from telegram.ext import filters
 
-from ..errors import WidgetError, UnexpectedError
-from .. import Context
-from . import ButtonLayout, Button
+from .._flow import Context
+from ..errors import UnexpectedError, WidgetError
+from ._common import Button, ButtonLayout
 
 
 class LMenu:
@@ -21,78 +18,95 @@ class LMenu:
       ["Users", "Setting"],
       [Button("Cancel", style="danger")]
     ]
-    menu = LMenu(layout = panel_layout, ...)
-    result = await menu.show(...)
+    menu = LMenu(ctx=ctx, chat_id=chat_id)
+    result = await menu.show(layout=panel_layout, prompt="Choose")
 
   """
 
-  def __init__(
-    self,
-    ctx: Context,
-    chat_id: int,
-    layout: ButtonLayout | None = None,
-    prompt: str | None = None,
-    parse_mode: ParseMode | None = None,
-  ):
+  def __init__(self, ctx: Context, chat_id: int | str):
+    """
+    Args:
+      ctx: Flow context.
+      chat_id: Chat where the widget is shown.
+    """
     self._ctx: Context = ctx
-    self._chat_id: int = chat_id
-    self._layout: ButtonLayout | None = layout
-    self._prompt: str | None = prompt
-    self._parse_mode = parse_mode
+    self._chat_id: int | str = chat_id
 
-  def _create_keyboard(self) -> ReplyKeyboardMarkup:
-    keyboard: list[list] = copy.deepcopy(self._layout)
+    # Whether the menu keyboard is currently shown by this widget.
+    self._is_shown: bool = False
 
-    for i in range(len(keyboard)):
-      for j in range(len(keyboard[i])):
-        if isinstance(keyboard[i][j], Button):
-          _btn = keyboard[i][j]
-          keyboard[i][j] = KeyboardButton(text=_btn.text, style=_btn.style)
+  def _create_keyboard(self, layout: ButtonLayout) -> ReplyKeyboardMarkup:
+    keyboard: list[list[KeyboardButton]] = []
+    for row in layout:
+      keyboard_row: list[KeyboardButton] = []
+      for item in row:
+        if isinstance(item, str):
+          keyboard_row.append(KeyboardButton(text=item))
+        elif isinstance(item, Button):
+          keyboard_row.append(KeyboardButton(text=item.text, style=item.style))
+        else:
+          raise WidgetError("item must be of type str or Button")
+
+      keyboard.append(keyboard_row)
 
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-  def _check_layout(self, layout: ButtonLayout | None):
-    if layout is None:
-      raise WidgetError("layout is None")
-    elif len(layout) == 0:
+  def _check_layout(self, layout: ButtonLayout) -> None:
+    if len(layout) == 0:
       raise WidgetError("Menu layout is empty")
 
   async def show(
     self,
-    layout: ButtonLayout | None = None,
-    prompt: str | None = None,
+    layout: ButtonLayout,
+    prompt: str,
     parse_mode: ParseMode | None = None,
   ) -> str:
-    """ Show the menu and wait for the button click result.
+    """Show the menu and wait for the button click result.
 
-      Returns:
-        Text of the clicked button
+    Args:
+      layout: Rows of buttons of the menu.
+      prompt: Message text shown above the keyboard.
+      parse_mode: Parse mode used for `prompt`.
+
+    Returns:
+      Text of the clicked button.
+
+    Raises:
+      WidgetError: If `layout` is empty.
     """
-
-    self._layout = layout or self._layout
-    self._parse_mode = parse_mode or self._parse_mode
-    self._check_layout(self._layout)
+    self._check_layout(layout)
 
     await self._ctx.bot.send_message(
       chat_id=self._chat_id,
-      text=prompt or self._prompt,
-      reply_markup=self._create_keyboard(),
-      parse_mode=self._parse_mode,
+      text=prompt,
+      reply_markup=self._create_keyboard(layout),
+      parse_mode=parse_mode,
     )
+    self._is_shown = True
 
     # Waiting for a button click
-    strings = [str(i) for i in itertools.chain.from_iterable(self._layout)]
+    strings = [str(item) for row in layout for item in row]
 
     msg = await self._ctx.message(filters.Text(strings))
-
     if msg.text is None:
       raise UnexpectedError("Message.text is None")
     else:
       return msg.text
 
-  async def remove(self, prompt: str):
-    await self._ctx.bot.send_message(
-      chat_id=self._chat_id,
-      text=prompt,
-      reply_markup=ReplyKeyboardRemove(),
-    )
+  async def remove(self, prompt: str, parse_mode: ParseMode | None = None) -> None:
+    """Hide the menu keyboard if it was shown by `show()`.
+
+    Does nothing if the menu keyboard is not currently shown.
+
+    Args:
+      prompt: Message text sent together with the keyboard removal.
+      parse_mode: Parse mode used for `prompt`.
+    """
+    if self._is_shown:
+      await self._ctx.bot.send_message(
+        chat_id=self._chat_id,
+        text=prompt,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode=parse_mode,
+      )
+      self._is_shown = False

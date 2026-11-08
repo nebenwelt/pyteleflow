@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.9] - 2026-11-08
+
+### Changed
+
+- Refactoring of Menu and LMenu widgets
+
 ## [0.1.8] - 2026-11-08
 
 ### Changed
@@ -14,6 +20,7 @@
 - LSelect widget: advanced Select with a button layout.
 
 ### Changed
+
 - Widgets: Menu, PagedSelect, Select
 
 ## [0.1.6] - 2026-10-29
