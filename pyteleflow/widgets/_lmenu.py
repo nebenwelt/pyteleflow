@@ -86,6 +86,7 @@ class LMenu:
       text=prompt,
       reply_markup=self._create_keyboard(layout),
       parse_mode=parse_mode,
+      disable_notification=True,
     )
     self._is_shown = True
 
@@ -116,5 +117,6 @@ class LMenu:
         text=prompt,
         reply_markup=ReplyKeyboardRemove(),
         parse_mode=parse_mode,
+        disable_notification=True,
       )
       self._is_shown = False

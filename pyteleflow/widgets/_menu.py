@@ -77,6 +77,7 @@ class Menu:
       text=prompt,
       reply_markup=self._create_keyboard(items),
       parse_mode=parse_mode,
+      disable_notification=True,
     )
     self._is_shown = True
 
@@ -107,5 +108,6 @@ class Menu:
         text=prompt,
         reply_markup=ReplyKeyboardRemove(),
         parse_mode=parse_mode,
+        disable_notification=True,
       )
       self._is_shown = False
